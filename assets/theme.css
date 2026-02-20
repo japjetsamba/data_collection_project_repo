@@ -1,0 +1,17 @@
+
+div.stButton > button, button[kind="primary"], .stDownloadButton > button {
+  background-color: #E65100 !important;
+  color: #FFFFFF !important;
+  border: 1px solid #E65100 !important;
+}
+div.stButton > button:hover, button[kind="primary"]:hover, .stDownloadButton > button:hover {
+  background-color: #BF360C !important;
+  border-color: #BF360C !important;
+  color: #FFFFFF !important;
+}
+[data-testid="baseLinkButton"] {
+  background-color: #E65100 !important; color: #FFFFFF !important; border: 1px solid #E65100 !important;
+}
+[data-testid="baseLinkButton"]:hover { background-color: #BF360C !important; border-color: #BF360C !important; }
+input[type="radio"]:checked + div, input[type="checkbox"]:checked + div { accent-color: #E65100 !important; }
+[data-baseweb="slider"] div[role="slider"] { background-color: #E65100 !important; }
