@@ -1,46 +1,60 @@
-
 # -*- coding: utf-8 -*-
+"""
+Streamlit app – Cloud-ready (Selenium)
+This version prepares the Streamlit Cloud runtime to use the system Chromium & Chromedriver
+installed via packages.txt (chromium, chromium-driver). It also adds a clearer error message
+if the remote driver exits with status code 127.
+"""
+
+import os
+import sys
+from pathlib import Path
+
 import streamlit as st
 import pandas as pd
-from pathlib import Path
-import sys
+
+# --- Cloud runtime preparation for Selenium ---
+# On Streamlit Community Cloud, ensure the system binaries are used
+if os.environ.get("STREAMLIT_RUNTIME", "") != "":
+    os.environ.setdefault("CHROME_BIN", "/usr/bin/chromium")
+    os.environ.setdefault("CHROMEDRIVER_PATH", "/usr/bin/chromedriver")
+    # Ensure /usr/bin is on PATH so selenium can resolve binaries if needed
+    os.environ["PATH"] = "/usr/bin:" + os.environ.get("PATH", "")
 
 # Imports locaux
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-import utils.scraping as scraping
-import utils.db as dbutils
-import utils.cleaning as cleaning
-import utils.charts as charts
+import utils.scraping as scraping  # noqa: E402
+import utils.db as dbutils         # noqa: E402
+import utils.cleaning as cleaning  # noqa: E402
+import utils.charts as charts      # noqa: E402
 
 st.set_page_config(page_title="Animals Data Collection – CoinAfrique SN", page_icon="🐾", layout="wide")
 
 # === THEME / CSS ===
-# - Si assets/theme.css existe → on l'injecte
-# - Sinon, fallback CSS pour garantir les boutons orange (y compris st.link_button pour Feedback)
 css_path = Path('assets/theme.css')
 if css_path.exists():
-    st.markdown('<style>' + css_path.read_text(encoding='utf-8') + '</style>', unsafe_allow_html=True)
+    st.markdown(css_path.read_text(encoding='utf-8'), unsafe_allow_html=True)
 else:
+    # Fallback to keep all important buttons in your preferred orange (#E65100)
     st.markdown(
         """
         <style>
-        /* Boutons principaux (y compris download) */
-        div.stButton > button, button[kind="primary"], .stDownloadButton > button {
-          background-color: #E65100 !important; color: #FFFFFF !important; border: 1px solid #E65100 !important;
+        :root {
+            --brand-orange: #E65100;
         }
-        div.stButton > button:hover, button[kind="primary"]:hover, .stDownloadButton > button:hover {
-          background-color: #BF360C !important; border-color: #BF360C !important; color: #FFFFFF !important;
+        .stButton>button,
+        a[kind="link"]:is([data-baseweb="button"]) {
+            background-color: var(--brand-orange) !important;
+            color: white !important;
+            border: 1px solid #c34100 !important;
         }
-        /* Boutons lien (Feedback) */
-        [data-testid="baseLinkButton"] {
-          background-color: #E65100 !important; color: #FFFFFF !important; border: 1px solid #E65100 !important;
-        }
-        [data-testid="baseLinkButton"]:hover {
-          background-color: #BF360C !important; border-color: #BF360C !important; color: #FFFFFF !important;
+        .stButton>button:hover,
+        a[kind="link"]:is([data-baseweb="button"]):hover {
+            filter: brightness(0.95);
         }
         </style>
         """,
-        unsafe_allow_html=True
+        unsafe_allow_html=True,
     )
 
 # URLs catégories
@@ -72,10 +86,11 @@ menu = st.sidebar.selectbox(
         "Dashboard (nettoyé)",
         "Feedback",
     ),
-    index=0
+    index=0,
 )
 
 # ---------------- Helpers ----------------
+
 def sync_cleaned_from_ws():
     WS_EXPECTED = {
         "chiens": WS_DIR / "chiens.csv",
@@ -89,18 +104,21 @@ def sync_cleaned_from_ws():
         "poules_lapins_pigeons": CLEAN_DIR / "poules_lapins_pigeons_clean.csv",
         "autres_animaux": CLEAN_DIR / "autres_animaux_clean.csv",
     }
+
     results = {}
     for key, ws_path in WS_EXPECTED.items():
         clean_path = CLEAN_TARGETS[key]
         results[key] = {"ws": ws_path, "clean": clean_path, "status": "skipped"}
         if not ws_path.exists():
-            results[key]["status"] = "missing_raw"; continue
+            results[key]["status"] = "missing_raw"
+            continue
         need_refresh = (not clean_path.exists()) or (ws_path.stat().st_mtime > clean_path.stat().st_mtime)
         if need_refresh:
             try:
                 df_raw = pd.read_csv(ws_path)
                 if df_raw.empty:
-                    results[key]["status"] = "raw_empty"; continue
+                    results[key]["status"] = "raw_empty"
+                    continue
                 df_clean = cleaning.basic_cleaning(df_raw.copy(), dropna_thresh=0.7, drop_duplicates=True)
                 df_clean.to_csv(clean_path, index=False, encoding="utf-8")
                 results[key]["status"] = "cleaned"
@@ -111,19 +129,23 @@ def sync_cleaned_from_ws():
     return results
 
 # ---------------- Pages ----------------
+
 def show_home():
     st.header("Bienvenue 👋")
     st.write(
         "Cette application scrape des annonces CoinAfrique SN, enregistre en base SQL, "
         "permet d'afficher les CSV bruts et propose un dashboard après nettoyage."
     )
-    st.markdown("""
-    **Fonctionnalités :**
-    - **Scraping** sur plusieurs pages via **Selenium** (visite des pages *détail* pour fiabilité)
-    - **Affichage** des données brutes collectées via *Web Scraper* (CSV)
-    - **Dashboard** basé sur les **données nettoyées**
-    - **Feedback** via formulaires **KoBo** et **Google Forms**
-    """)
+    st.markdown(
+        """
+        **Fonctionnalités :**
+        - **Scraping** sur plusieurs pages via **Selenium** (visite des pages *détail* pour fiabilité)
+        - **Affichage** des données brutes collectées via *Web Scraper* (CSV)
+        - **Dashboard** basé sur les **données nettoyées**
+        - **Feedback** via formulaires **KoBo** et **Google Forms**
+        """
+    )
+
 
 def show_scraper():
     st.header("SCRAPER ET ENREGISTREMENT DIRECT EN BASE")
@@ -142,11 +164,25 @@ def show_scraper():
     if st.button("Lancer le scraping et enregistrer en DB", type="primary"):
         with st.spinner("Scraping + insertion en base (Selenium)..."):
             try:
-                # Par défaut: headless=True (silencieux). Besoin de le voir ? On peut passer à False.
+                # Par défaut: headless=True (silencieux)
                 n = scraping.selenium_scrape_insert(category, 1, pages, headless=True, visit_detail=True)
                 st.success(f"Terminé — {n} lignes envoyées en DB (brut).")
             except Exception as e:
-                st.error(f"Erreur : {e}")
+                msg = str(e)
+                if "chromedriver" in msg and ("Status code: 127" in msg or "exited with code 127" in msg):
+                    st.error(
+                        """
+                        Chromedriver a quitté avec le **code 127** (binaire non trouvable ou dépendances manquantes).
+                        
+                        **Vérifie le déploiement :**
+                        1) Fichier `packages.txt` avec : `chromium` et `chromium-driver`
+                        2) `requirements.txt` avec Selenium/Streamlit
+                        3) Dans `utils/scraping.py`, utilise **/usr/bin/chromium** et **/usr/bin/chromedriver**
+                           (voir le patch proposé dans le README de déploiement).
+                        """
+                    )
+                else:
+                    st.error(f"Erreur : {e}")
 
     if st.button("Afficher les données en DB"):
         try:
@@ -159,6 +195,7 @@ def show_scraper():
         except Exception as e:
             st.error(f"Impossible d'afficher : {e}")
 
+
 def show_ws_csv():
     st.header("WEB SCRAPER")
     st.caption("Cliquez sur une catégorie pour afficher les CSV bruts (collectés avec l'extension Web Scraper).")
@@ -169,18 +206,23 @@ def show_ws_csv():
         "Poules-Lapins-Pigeons": "poules_lapins_pigeons.csv",
         "Autres animaux": "autres_animaux.csv",
     }
+
     if "ws_choice_file" not in st.session_state:
         st.session_state.ws_choice_file = None
 
     c1, c2, c3, c4 = st.columns(4)
     with c1:
-        if st.button("Chiens", use_container_width=True): st.session_state.ws_choice_file = FILE_MAP["Chiens"]
+        if st.button("Chiens", use_container_width=True):
+            st.session_state.ws_choice_file = FILE_MAP["Chiens"]
     with c2:
-        if st.button("Moutons", use_container_width=True): st.session_state.ws_choice_file = FILE_MAP["Moutons"]
+        if st.button("Moutons", use_container_width=True):
+            st.session_state.ws_choice_file = FILE_MAP["Moutons"]
     with c3:
-        if st.button("Poules-Lapins-Pigeons", use_container_width=True): st.session_state.ws_choice_file = FILE_MAP["Poules-Lapins-Pigeons"]
+        if st.button("Poules-Lapins-Pigeons", use_container_width=True):
+            st.session_state.ws_choice_file = FILE_MAP["Poules-Lapins-Pigeons"]
     with c4:
-        if st.button("Autres animaux", use_container_width=True): st.session_state.ws_choice_file = FILE_MAP["Autres animaux"]
+        if st.button("Autres animaux", use_container_width=True):
+            st.session_state.ws_choice_file = FILE_MAP["Autres animaux"]
 
     if not st.session_state.ws_choice_file:
         st.info("En attente d'une sélection…")
@@ -201,6 +243,7 @@ def show_ws_csv():
     st.write(f"**Taille** : {df.shape[0]} lignes × {df.shape[1]} colonnes")
     st.dataframe(df.head(100), use_container_width=True)
 
+
 def show_dashboard():
     st.header("DASHBOARD (DONNÉES NETTOYÉES)")
     st.caption("Diagrammes construits à partir des CSV nettoyés (Web Scraper → nettoyage).")
@@ -217,10 +260,12 @@ def show_dashboard():
     for cat, p in paths.items():
         if p.exists():
             try:
-                df0 = pd.read_csv(p); df0['category'] = cat
+                df0 = pd.read_csv(p)
+                df0['category'] = cat
                 frames.append(df0)
             except Exception:
                 pass
+
     if not frames:
         st.warning("Aucun CSV nettoyé. Déposez d'abord des bruts en Option Web Scraper.")
         return
@@ -228,11 +273,17 @@ def show_dashboard():
     clean_all = pd.concat(frames, ignore_index=True)
     clean_all = cleaning.basic_cleaning(clean_all, dropna_thresh=0.0, drop_duplicates=False)
 
-    c1, c2 = st.columns(2); c3, c4 = st.columns(2)
-    with c1: st.plotly_chart(charts.chart_price_hist(clean_all), use_container_width=True)
-    with c2: st.plotly_chart(charts.chart_price_by_category(clean_all), use_container_width=True)
-    with c3: st.plotly_chart(charts.chart_top_cities(clean_all), use_container_width=True)
-    with c4: st.plotly_chart(charts.chart_price_bins(clean_all), use_container_width=True)
+    c1, c2 = st.columns(2)
+    c3, c4 = st.columns(2)
+    with c1:
+        st.plotly_chart(charts.chart_price_hist(clean_all), use_container_width=True)
+    with c2:
+        st.plotly_chart(charts.chart_price_by_category(clean_all), use_container_width=True)
+    with c3:
+        st.plotly_chart(charts.chart_top_cities(clean_all), use_container_width=True)
+    with c4:
+        st.plotly_chart(charts.chart_price_bins(clean_all), use_container_width=True)
+
 
 def show_feedback():
     st.header("FEEDBACK")
