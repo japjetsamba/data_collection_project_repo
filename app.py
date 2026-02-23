@@ -1,11 +1,8 @@
-
 # -*- coding: utf-8 -*-
 import streamlit as st
 import pandas as pd
 from pathlib import Path
 import sys
-
-# Imports locaux
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import utils.scraping as scraping
 import utils.db as dbutils
@@ -14,109 +11,74 @@ import utils.charts as charts
 
 st.set_page_config(page_title="Animals Data Collection – CoinAfrique SN", page_icon="🐾", layout="wide")
 
-# === THEME / CSS ===
-# - Si assets/theme.css existe → on l'injecte
-# - Sinon, fallback CSS pour garantir les boutons orange (y compris st.link_button pour Feedback)
+# Inject CSS if present
 css_path = Path('assets/theme.css')
 if css_path.exists():
     st.markdown('<style>' + css_path.read_text(encoding='utf-8') + '</style>', unsafe_allow_html=True)
-else:
-    st.markdown(
-        """
-        <style>
-        /* Boutons principaux (y compris download) */
-        div.stButton > button, button[kind="primary"], .stDownloadButton > button {
-          background-color: #E65100 !important; color: #FFFFFF !important; border: 1px solid #E65100 !important;
-        }
-        div.stButton > button:hover, button[kind="primary"]:hover, .stDownloadButton > button:hover {
-          background-color: #BF360C !important; border-color: #BF360C !important; color: #FFFFFF !important;
-        }
-        /* Boutons lien (Feedback) */
-        [data-testid="baseLinkButton"] {
-          background-color: #E65100 !important; color: #FFFFFF !important; border: 1px solid #E65100 !important;
-        }
-        [data-testid="baseLinkButton"]:hover {
-          background-color: #BF360C !important; border-color: #BF360C !important; color: #FFFFFF !important;
-        }
-        </style>
-        """,
-        unsafe_allow_html=True
-    )
 
-# URLs catégories
 SCRAPE_URLS = {
-    "Chiens": "https://sn.coinafrique.com/categorie/chiens",
-    "Moutons": "https://sn.coinafrique.com/categorie/moutons",
-    "Poules-Lapins-Pigeons": "https://sn.coinafrique.com/categorie/poules-lapins-et-pigeons",
-    "Autres animaux": "https://sn.coinafrique.com/categorie/autres-animaux",
+    'Chiens': 'https://sn.coinafrique.com/categorie/chiens',
+    'Moutons': 'https://sn.coinafrique.com/categorie/moutons',
+    'Poules-Lapins-Pigeons': 'https://sn.coinafrique.com/categorie/poules-lapins-et-pigeons',
+    'Autres animaux': 'https://sn.coinafrique.com/categorie/autres-animaux',
 }
 DEFAULT_PAGES = 2
 
-# Dossiers
-DATA_DIR = Path("data")
-WS_DIR = DATA_DIR / "webscraper_csv"
-CLEAN_DIR = DATA_DIR / "cleaned"
-RAW_DIR = DATA_DIR / "raw"
+DATA_DIR = Path('data')
+WS_DIR = DATA_DIR / 'webscraper_csv'
+CLEAN_DIR = DATA_DIR / 'cleaned'
+RAW_DIR = DATA_DIR / 'raw'
 for p in (WS_DIR, CLEAN_DIR, RAW_DIR):
     p.mkdir(parents=True, exist_ok=True)
 
-# Sidebar
-st.sidebar.image("assets/logo.png", width=120)
-st.sidebar.title("Menu")
+st.sidebar.image('assets/logo.png', width=120)
+st.sidebar.title('Menu')
 menu = st.sidebar.selectbox(
-    "Choisir une page",
-    (
-        "Accueil",
-        "Scraper",
-        "Web Scraper (CSV brut)",
-        "Dashboard (nettoyé)",
-        "Feedback",
-    ),
+    'Choisir une page',
+    ('Accueil','Scraper','Web Scraper (CSV brut)','Dashboard (nettoyé)','Feedback'),
     index=0
 )
 
-# ---------------- Helpers ----------------
 def sync_cleaned_from_ws():
     WS_EXPECTED = {
-        "chiens": WS_DIR / "chiens.csv",
-        "moutons": WS_DIR / "moutons.csv",
-        "poules_lapins_pigeons": WS_DIR / "poules_lapins_pigeons.csv",
-        "autres_animaux": WS_DIR / "autres_animaux.csv",
+        'chiens': WS_DIR / 'chiens.csv',
+        'moutons': WS_DIR / 'moutons.csv',
+        'poules_lapins_pigeons': WS_DIR / 'poules_lapins_pigeons.csv',
+        'autres_animaux': WS_DIR / 'autres_animaux.csv',
     }
     CLEAN_TARGETS = {
-        "chiens": CLEAN_DIR / "chiens_clean.csv",
-        "moutons": CLEAN_DIR / "moutons_clean.csv",
-        "poules_lapins_pigeons": CLEAN_DIR / "poules_lapins_pigeons_clean.csv",
-        "autres_animaux": CLEAN_DIR / "autres_animaux_clean.csv",
+        'chiens': CLEAN_DIR / 'chiens_clean.csv',
+        'moutons': CLEAN_DIR / 'moutons_clean.csv',
+        'poules_lapins_pigeons': CLEAN_DIR / 'poules_lapins_pigeons_clean.csv',
+        'autres_animaux': CLEAN_DIR / 'autres_animaux_clean.csv',
     }
     results = {}
     for key, ws_path in WS_EXPECTED.items():
         clean_path = CLEAN_TARGETS[key]
-        results[key] = {"ws": ws_path, "clean": clean_path, "status": "skipped"}
+        results[key] = {'ws': ws_path, 'clean': clean_path, 'status': 'skipped'}
         if not ws_path.exists():
-            results[key]["status"] = "missing_raw"; continue
+            results[key]['status'] = 'missing_raw'; continue
         need_refresh = (not clean_path.exists()) or (ws_path.stat().st_mtime > clean_path.stat().st_mtime)
         if need_refresh:
             try:
                 df_raw = pd.read_csv(ws_path)
                 if df_raw.empty:
-                    results[key]["status"] = "raw_empty"; continue
+                    results[key]['status'] = 'raw_empty'; continue
                 df_clean = cleaning.basic_cleaning(df_raw.copy(), dropna_thresh=0.7, drop_duplicates=True)
-                df_clean.to_csv(clean_path, index=False, encoding="utf-8")
-                results[key]["status"] = "cleaned"
+                df_clean.to_csv(clean_path, index=False, encoding='utf-8')
+                results[key]['status'] = 'cleaned'
             except Exception as e:
-                results[key]["status"] = f"error: {e}"
+                results[key]['status'] = f'error: {e}'
         else:
-            results[key]["status"] = "up_to_date"
+            results[key]['status'] = 'up_to_date'
     return results
 
 # ---------------- Pages ----------------
+
 def show_home():
-    st.header("Bienvenue 👋")
-    st.write(
-        "Cette application scrape des annonces CoinAfrique SN, enregistre en base SQL, "
-        "permet d'afficher les CSV bruts et propose un dashboard après nettoyage."
-    )
+    st.header('Bienvenue 👋')
+    st.write('Cette application scrape des annonces CoinAfrique SN, enregistre en base SQL, '
+             "permet d'afficher les CSV bruts et propose un dashboard après nettoyage.")
     st.markdown("""
     **Fonctionnalités :**
     - **Scraping** sur plusieurs pages via **Selenium** (visite des pages *détail* pour fiabilité)
@@ -126,33 +88,26 @@ def show_home():
     """)
 
 def show_scraper():
-    st.header("SCRAPER ET ENREGISTREMENT DIRECT EN BASE")
-    st.caption(
-        "Choisissez la catégorie et le nombre de pages, puis lancez le scraping. "
-        "Le robot visite les pages *détail* et enregistre directement en SQLite."
-    )
-
+    st.header('SCRAPER ET ENREGISTREMENT DIRECT EN BASE')
+    st.caption('Choisissez la catégorie et le nombre de pages, puis lancez le scraping. '
+               'Le robot visite les pages *détail* et enregistre directement en SQLite.')
     c1, c2 = st.columns(2)
     with c1:
-        category = st.selectbox("Catégorie", list(SCRAPE_URLS.keys()), index=0)
+        category = st.selectbox('Catégorie', list(SCRAPE_URLS.keys()), index=0)
     with c2:
-        pages = st.slider("Pages", 1, 10, DEFAULT_PAGES)
-
-    # Selenium uniquement : plus de radio “Méthode”, plus de case “Selenium headless”
-    if st.button("Lancer le scraping et enregistrer en DB", type="primary"):
-        with st.spinner("Scraping + insertion en base (Selenium)..."):
+        pages = st.slider('Pages', 1, 10, DEFAULT_PAGES)
+    if st.button('Lancer le scraping et enregistrer en DB', type='primary'):
+        with st.spinner('Scraping + insertion en base (Selenium)...'):
             try:
-                # Par défaut: headless=True (silencieux). Besoin de le voir ? On peut passer à False.
                 n = scraping.selenium_scrape_insert(category, 1, pages, headless=True, visit_detail=True)
-                st.success(f"Terminé — {n} lignes envoyées en DB (brut).")
+                st.success(f'Terminé — {n} lignes envoyées en DB (brut).')
             except Exception as e:
-                st.error(f"Erreur : {e}")
-
-    if st.button("Afficher les données en DB"):
+                st.error(f'Erreur : {e}')
+    if st.button('Afficher les données en DB'):
         try:
             df_db = dbutils.fetch_all_raw()
             if df_db is None or df_db.empty:
-                st.info("La base est vide.")
+                st.info('La base est vide.')
             else:
                 df_cat = df_db[df_db['category'] == category] if 'category' in df_db.columns else df_db
                 st.dataframe(df_cat.head(300), use_container_width=True)
@@ -160,97 +115,75 @@ def show_scraper():
             st.error(f"Impossible d'afficher : {e}")
 
 def show_ws_csv():
-    st.header("WEB SCRAPER")
-    st.caption("Cliquez sur une catégorie pour afficher les CSV bruts (collectés avec l'extension Web Scraper).")
-
-    FILE_MAP = {
-        "Chiens": "chiens.csv",
-        "Moutons": "moutons.csv",
-        "Poules-Lapins-Pigeons": "poules_lapins_pigeons.csv",
-        "Autres animaux": "autres_animaux.csv",
-    }
-    if "ws_choice_file" not in st.session_state:
+    st.header('WEB SCRAPER')
+    st.caption('Cliquez sur une catégorie pour afficher les CSV bruts (collectés avec l’extension Web Scraper).')
+    FILE_MAP = {'Chiens':'chiens.csv','Moutons':'moutons.csv','Poules-Lapins-Pigeons':'poules_lapins_pigeons.csv','Autres animaux':'autres_animaux.csv'}
+    if 'ws_choice_file' not in st.session_state:
         st.session_state.ws_choice_file = None
-
-    c1, c2, c3, c4 = st.columns(4)
+    c1,c2,c3,c4 = st.columns(4)
     with c1:
-        if st.button("Chiens", use_container_width=True): st.session_state.ws_choice_file = FILE_MAP["Chiens"]
+        if st.button('Chiens', use_container_width=True): st.session_state.ws_choice_file = FILE_MAP['Chiens']
     with c2:
-        if st.button("Moutons", use_container_width=True): st.session_state.ws_choice_file = FILE_MAP["Moutons"]
+        if st.button('Moutons', use_container_width=True): st.session_state.ws_choice_file = FILE_MAP['Moutons']
     with c3:
-        if st.button("Poules-Lapins-Pigeons", use_container_width=True): st.session_state.ws_choice_file = FILE_MAP["Poules-Lapins-Pigeons"]
+        if st.button('Poules-Lapins-Pigeons', use_container_width=True): st.session_state.ws_choice_file = FILE_MAP['Poules-Lapins-Pigeons']
     with c4:
-        if st.button("Autres animaux", use_container_width=True): st.session_state.ws_choice_file = FILE_MAP["Autres animaux"]
-
+        if st.button('Autres animaux', use_container_width=True): st.session_state.ws_choice_file = FILE_MAP['Autres animaux']
     if not st.session_state.ws_choice_file:
         st.info("En attente d'une sélection…")
         return
-
     path = WS_DIR / st.session_state.ws_choice_file
     if not path.exists():
-        st.error(f"Fichier introuvable : {path.name}")
+        st.error(f'Fichier introuvable : {path.name}')
         return
-
     try:
         df = pd.read_csv(path)
     except Exception as e:
-        st.error(f"Lecture impossible : {e}")
+        st.error(f'Lecture impossible : {e}')
         return
-
-    st.subheader(f"Aperçu — {path.name}")
-    st.write(f"**Taille** : {df.shape[0]} lignes × {df.shape[1]} colonnes")
+    st.subheader(f'Aperçu — {path.name}')
+    st.write(f'**Taille** : {df.shape[0]} lignes × {df.shape[1]} colonnes')
     st.dataframe(df.head(100), use_container_width=True)
 
 def show_dashboard():
-    st.header("DASHBOARD (DONNÉES NETTOYÉES)")
-    st.caption("Diagrammes construits à partir des CSV nettoyés (Web Scraper → nettoyage).")
-
+    st.header('DASHBOARD (DONNÉES NETTOYÉES)')
+    st.caption('Diagrammes construits à partir des CSV nettoyés (Web Scraper → nettoyage).')
     _ = sync_cleaned_from_ws()
-    paths = {
-        "Chiens": CLEAN_DIR / "chiens_clean.csv",
-        "Moutons": CLEAN_DIR / "moutons_clean.csv",
-        "Poules-Lapins-Pigeons": CLEAN_DIR / "poules_lapins_pigeons_clean.csv",
-        "Autres animaux": CLEAN_DIR / "autres_animaux_clean.csv",
-    }
-
+    paths = {'Chiens': CLEAN_DIR/'chiens_clean.csv', 'Moutons': CLEAN_DIR/'moutons_clean.csv', 'Poules-Lapins-Pigeons': CLEAN_DIR/'poules_lapins_pigeons_clean.csv', 'Autres animaux': CLEAN_DIR/'autres_animaux_clean.csv'}
     frames = []
-    for cat, p in paths.items():
+    for cat,p in paths.items():
         if p.exists():
             try:
-                df0 = pd.read_csv(p); df0['category'] = cat
-                frames.append(df0)
+                df0 = pd.read_csv(p); df0['category']=cat; frames.append(df0)
             except Exception:
                 pass
     if not frames:
         st.warning("Aucun CSV nettoyé. Déposez d'abord des bruts en Option Web Scraper.")
         return
-
     clean_all = pd.concat(frames, ignore_index=True)
     clean_all = cleaning.basic_cleaning(clean_all, dropna_thresh=0.0, drop_duplicates=False)
-
-    c1, c2 = st.columns(2); c3, c4 = st.columns(2)
+    c1,c2 = st.columns(2); c3,c4 = st.columns(2)
     with c1: st.plotly_chart(charts.chart_price_hist(clean_all), use_container_width=True)
     with c2: st.plotly_chart(charts.chart_price_by_category(clean_all), use_container_width=True)
     with c3: st.plotly_chart(charts.chart_top_cities(clean_all), use_container_width=True)
     with c4: st.plotly_chart(charts.chart_price_bins(clean_all), use_container_width=True)
 
 def show_feedback():
-    st.header("FEEDBACK")
-    st.caption("Partagez votre avis via KoBo ou Google Forms.")
+    st.header('FEEDBACK')
+    st.caption('Partagez votre avis via KoBo ou Google Forms.')
     c = st.columns(3)[1]
     with c:
         st.link_button('Formulaire KoboCollect', 'https://ee.kobotoolbox.org/x/y7oeqeWT', use_container_width=True)
-        st.write("")
+        st.write('')
         st.link_button('Formulaire Google Forms', 'https://docs.google.com/forms/d/e/1FAIpQLScz0D9zMk3VA10yUPXLIB76yYQFZsNy9CfsQOAjjkgY-JYeSQ/viewform?usp=publish-editor', use_container_width=True)
 
-# Router
-if menu == "Accueil":
+if menu == 'Accueil':
     show_home()
-elif menu == "Scraper":
+elif menu == 'Scraper':
     show_scraper()
-elif menu == "Web Scraper (CSV brut)":
+elif menu == 'Web Scraper (CSV brut)':
     show_ws_csv()
-elif menu == "Dashboard (nettoyé)":
+elif menu == 'Dashboard (nettoyé)':
     show_dashboard()
-elif menu == "Feedback":
+elif menu == 'Feedback':
     show_feedback()

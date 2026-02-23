@@ -1,4 +1,6 @@
-streamlit>=1.29
-selenium==4.15.2
+streamlit
 pandas
+selenium
+webdriver-manager
 plotly
+pillow
